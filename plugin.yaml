@@ -1,0 +1,29 @@
+name: "secure-import"
+version: "0.1.0"
+usage: "Import Helm charts and container images to OCI-compliant Registry"
+description: |-
+  This plugin helps you import Helm charts and their container images into any OCI-compliant Registry.
+  Features:
+  - Vulnerability scanning with Trivy
+  - Automatic patching of vulnerable images with Copa
+  - Optional artifact signing with cosign
+  - Support for any OCI-compliant registry
+  
+  Basic usage:
+    $ helm secure-import --chart <name> --version <version> --repo-url <url> --registry <registry>
+  
+  With signing:
+    $ helm secure-import --chart <name> --version <version> --repo-url <url> --registry <registry> --sign-key <key-path>
+
+command: "$HELM_PLUGIN_DIR/bin/secure-import-wrapper.sh"
+hooks:
+  install: "cd $HELM_PLUGIN_DIR; scripts/install.sh"
+  update: "cd $HELM_PLUGIN_DIR; scripts/install.sh"
+  uninstall: "cd $HELM_PLUGIN_DIR; scripts/uninstall.sh"
+platformCommand:
+  - os: linux
+    arch: amd64
+    command: "$HELM_PLUGIN_DIR/bin/secure-import-wrapper.sh"
+  - os: darwin
+    arch: amd64
+    command: "$HELM_PLUGIN_DIR/bin/secure-import-wrapper.sh"
