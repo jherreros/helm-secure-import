@@ -14,7 +14,11 @@ RUN apk add --no-cache \
     curl \
     docker-cli \
     git \
-    yq
+    yq \
+    openssl
+
+# Install helm
+RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Install Trivy
 RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
