@@ -1,6 +1,6 @@
 # Helm Registry Import Plugin
 
-A Helm plugin that imports charts and their container images into OCI-compliant Registry, with built-in vulnerability scanning, patching, and signing capabilities.
+A Helm plugin that imports charts and their container images into an OCI-compliant Registry, with built-in vulnerability scanning, patching, and signing capabilities.
 
 ## Features
 
@@ -21,7 +21,7 @@ A Helm plugin that imports charts and their container images into OCI-compliant 
 ## Installation
 
 ```bash
-helm plugin install https://github.com/[username]/helm-secure-import
+helm plugin install https://github.com/jherreros/helm-secure-import
 ```
 
 ## Usage
@@ -31,9 +31,11 @@ helm secure-import --chart <chart-name> \
                     --version <chart-version> \
                     --repo-url <repository-url> \
                     --registry <registry-url> \
-                    --sign-key <cosign-key-path> \
+                    [--sign-key <cosign-key-path>] \
                     [--values <values-file>]
 ```
+
+Further examples of how to use the plugin can be found under [examples](examples/basic/basic.md).
 
 ### Parameters
 
@@ -41,8 +43,8 @@ helm secure-import --chart <chart-name> \
 - `--version`: Version of the chart to import
 - `--repo-url`: URL of the Helm repository
 - `--registry`: Name of the OCI-compliant Registry
-- `--sign-key`: Path to the Cosign signing key
-- `--values` (optional): Path to a values file for chart templating
+- `--sign-key` (optional): Path to the Cosign signing key or KMS URI
+- `--values` (optional): Path to a Helm values file
 
 ### Example
 
@@ -66,6 +68,10 @@ If vulnerabilities are found, the plugin automatically patches the images using 
 ### Signing
 Both charts and container images are signed using Cosign before being pushed to your registry. This ensures the integrity and authenticity of the artifacts.
 
+## Acknowledgements
+
+The idea for this plugin is inspired in [Helmper](https://github.com/ChristofferNissen/helmper).
+
 ## License
 
-This project is licensed under the (MIT license)[LICENSE]
+This project is licensed under the MIT license.

@@ -1,0 +1,13 @@
+charts:
+  - name: nginx
+    version: 18.2.4
+    repository: https://charts.bitnami.com/bitnami
+    values: ./nginx-values.yaml
+  - name: postgresql
+    version: 16.1.0
+    repository: https://charts.bitnami.com/bitnami
+    values: ./postgresql-values.yaml
+  - name: redis
+    version: 20.2.1
+    repository: https://charts.bitnami.com/bitnami
+    values: ./redis-values.yaml
