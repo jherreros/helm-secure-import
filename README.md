@@ -17,6 +17,10 @@ A Helm plugin that imports charts and their container images into an OCI-complia
 
 - Helm v3.x
 - Docker
+- yq
+- Copa
+- Trivy
+- Cosign
 
 ## Installation
 

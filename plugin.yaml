@@ -15,7 +15,7 @@ description: |-
   With signing:
     $ helm secure-import --chart <name> --version <version> --repo-url <url> --registry <registry> --sign-key <key-path>
 
-command: "$HELM_PLUGIN_DIR/bin/secure-import-wrapper.sh"
+command: "$HELM_PLUGIN_DIR/bin/helm-secure-import"
 hooks:
   install: "cd $HELM_PLUGIN_DIR; scripts/install.sh"
   update: "cd $HELM_PLUGIN_DIR; scripts/install.sh"
@@ -23,7 +23,7 @@ hooks:
 platformCommand:
   - os: linux
     arch: amd64
-    command: "$HELM_PLUGIN_DIR/bin/secure-import-wrapper.sh"
+    command: "$HELM_PLUGIN_DIR/bin/helm-secure-import"
   - os: darwin
     arch: amd64
-    command: "$HELM_PLUGIN_DIR/bin/secure-import-wrapper.sh"
+    command: "$HELM_PLUGIN_DIR/bin/helm-secure-import"

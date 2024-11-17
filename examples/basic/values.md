@@ -1,2 +1,0 @@
-# Custom Values Example
-

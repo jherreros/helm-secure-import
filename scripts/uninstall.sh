@@ -22,11 +22,4 @@ if [ -d "${PLUGIN_DIR}/bin" ] && [ -z "$(ls -A ${PLUGIN_DIR}/bin)" ]; then
     echo "Removed empty bin directory"
 fi
 
-CONTAINER_IMAGE="ghcr.io/jherreros/helm-secure-import:latest"
-# Remove the Docker image if it exists
-if docker image inspect "$CONTAINER_IMAGE" >/dev/null 2>&1; then
-    echo "Removing Docker image $CONTAINER_IMAGE..."
-    docker rmi "$CONTAINER_IMAGE" || true
-fi
-
 echo "Plugin uninstallation completed successfully!"
