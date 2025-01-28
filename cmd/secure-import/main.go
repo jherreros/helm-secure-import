@@ -25,8 +25,9 @@ func run(config *Config) error {
 		return fmt.Errorf("failed to pull chart: %w", err)
 	}
 
-	// Check if chart exists in
-	chartExists, err := checkChartExists(config)
+	// Check if chart exists
+	chartRef := fmt.Sprintf("%s/charts/%s:%s", config.Registry, config.ChartName, config.Version)
+	chartExists, err := imageExists(chartRef)
 	if err != nil {
 		return err
 	}

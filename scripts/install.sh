@@ -4,7 +4,7 @@ set -e
 
 prerequisites=(cosign trivy copa yq docker)
 
-# Check for Docker
+# Check for prerequisites
 for command in $prerequisites
 do
     if ! command -v $command >/dev/null 2>&1; then

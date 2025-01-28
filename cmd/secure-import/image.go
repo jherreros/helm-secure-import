@@ -1,10 +1,11 @@
 package main
 
 import (
-	"net/http"
 	"fmt"
 	"path/filepath"
 	"strings"
+	"github.com/google/go-containerregistry/pkg/crane"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
 type TrivyResult struct {
@@ -13,6 +14,35 @@ type TrivyResult struct {
 	} `json:"Results"`
 }
 
+func imageExists(imageRef string) (bool, error) {
+	// Attempt to get the manifest
+	_, err := crane.Manifest(imageRef)
+	if err != nil {
+		// Check if the error is specifically "not found"
+		if remoteErr, ok := err.(*transport.Error); ok {
+			if remoteErr.StatusCode == 404 {
+				return false, nil
+			}
+		}
+		// For other errors, return the error to handle upstream
+		return false, fmt.Errorf("error checking image: %w", err)
+	}
+
+	return true, nil
+}
+
+func getDigest(registry, repository, reference string) (string, error) {
+	imageRef := fmt.Sprintf("%s/%s:%s", 
+	registry, repository, reference)
+
+	// Get the digest using crane
+	digest, err := crane.Digest(imageRef)
+	if err != nil {
+		return "", fmt.Errorf("getting digest: %w", err)
+	}
+
+	return digest, nil
+}
 
 func processImage(image string, config *Config) error {
 	parts := strings.Split(image, "/")
@@ -30,16 +60,8 @@ func processImage(image string, config *Config) error {
 	name := nameWithTag[:lastIndex]
 	tag := nameWithTag[lastIndex+1:]
 	finalImage := fmt.Sprintf("%s/%s:%s", config.Registry, name, tag)
-
-	// Check if image exists using registry API
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", 
-		config.Registry, name, tag)
 	
-	resp, err := http.Head(url)
-	exists := err == nil && resp.StatusCode == http.StatusOK
-	if resp != nil {
-		resp.Body.Close()
-	}
+	exists, err := imageExists(finalImage)
 
 	if !exists {
 		if err := processNewImage(image, registry, name, tag, finalImage, config); err != nil {
@@ -49,7 +71,7 @@ func processImage(image string, config *Config) error {
 		fmt.Printf("Image %s:%s already exists in registry. Skipping push.\n", name, tag)
 	}
 
-	return nil
+	return err
 }
 
 func processNewImage(image, registry, name, tag, finalImage string, config *Config) error {
@@ -108,13 +130,17 @@ func processNewImage(image, registry, name, tag, finalImage string, config *Conf
 		return fmt.Errorf("failed to push image: %w", err)
 	}
 
-	// Get digest using registry API
+	// Skip signing if no key provided
+	if !config.Sign {
+		fmt.Println("Skipping image signing as no signing key was provided")
+		return nil
+	}
+
 	digest, err := getDigest(config.Registry, name, tag)
 	if err != nil {
 		return fmt.Errorf("failed to get image digest: %w", err)
 	}
 
-	// Sign image (unchanged)
 	return execCommand("cosign", "sign",
 		"--tlog-upload=false",
 		"--key", config.SignKey,
