@@ -33,7 +33,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            bin/*
+            cmd/secure-import/bin/*
           draft: false
           prerelease: false
           generate_release_notes: true
