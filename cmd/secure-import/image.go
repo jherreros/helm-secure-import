@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"github.com/google/go-containerregistry/pkg/crane"
+	v1name "github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
@@ -32,8 +35,7 @@ func imageExists(imageRef string) (bool, error) {
 }
 
 func getDigest(registry, repository, reference string) (string, error) {
-	imageRef := fmt.Sprintf("%s/%s:%s", 
-	registry, repository, reference)
+	imageRef := fmt.Sprintf("%s/%s:%s", registry, repository, reference)
 
 	// Get the digest using crane
 	digest, err := crane.Digest(imageRef)
@@ -62,6 +64,9 @@ func processImage(image string, config *Config) error {
 	finalImage := fmt.Sprintf("%s/%s:%s", config.Registry, name, tag)
 	
 	exists, err := imageExists(finalImage)
+	if err != nil {
+		return err
+	}
 
 	if !exists {
 		if err := processNewImage(image, registry, name, tag, finalImage, config); err != nil {
@@ -71,17 +76,20 @@ func processImage(image string, config *Config) error {
 		fmt.Printf("Image %s:%s already exists in registry. Skipping push.\n", name, tag)
 	}
 
-	return err
+	return nil
 }
 
 func processNewImage(image, registry, name, tag, finalImage string, config *Config) error {
-	// Pull image
-	if err := execCommand("docker", "pull", image); err != nil {
+	img, err := crane.Pull(image)
+	if err != nil {
 		return fmt.Errorf("failed to pull image: %w", err)
 	}
 
-	// Run Trivy scan
-	jsonFile := filepath.Base(image) + ".json"
+	// Use temp directory for Trivy scan results
+	jsonFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%s.json", 
+		strings.ReplaceAll(name, "/", "-"), tag))
+	defer os.Remove(jsonFile)
+
 	if err := execCommand("trivy", "image",
 		"--vuln-type", "os",
 		"--ignore-unfixed",
@@ -105,16 +113,24 @@ func processNewImage(image, registry, name, tag, finalImage string, config *Conf
 			"-t", "patched"); err != nil {
 			return fmt.Errorf("failed to patch image: %w", err)
 		}
-		if err := execCommand("docker", "tag",
-			fmt.Sprintf("%s/%s:patched", registry, name),
-			finalImage); err != nil {
-			return fmt.Errorf("failed to tag patched image: %w", err)
+		
+		// Get the patched image from local daemon
+		ref, err := v1name.ParseReference(fmt.Sprintf("%s/%s:patched", registry, name))
+		if err != nil {
+			return fmt.Errorf("failed to parse reference: %w", err)
+		}
+		
+		img, err = daemon.Image(ref)
+		if err != nil {
+			return fmt.Errorf("failed to get patched image from daemon: %w", err)
 		}
 	} else {
 		fmt.Println("No vulnerabilities were found.")
-		if err := execCommand("docker", "tag", image, finalImage); err != nil {
-			return fmt.Errorf("failed to tag image: %w", err)
-		}
+	}
+
+	// Push the final image using crane
+	if err := crane.Push(img, finalImage); err != nil {
+		return fmt.Errorf("failed to push image: %w", err)
 	}
 
 	// Run post-patch Trivy scan
@@ -123,11 +139,6 @@ func processNewImage(image, registry, name, tag, finalImage string, config *Conf
 		"--ignore-unfixed",
 		finalImage); err != nil {
 		return fmt.Errorf("failed to run post-patch Trivy scan: %w", err)
-	}
-
-	// Push image
-	if err := execCommand("docker", "push", finalImage); err != nil {
-		return fmt.Errorf("failed to push image: %w", err)
 	}
 
 	// Skip signing if no key provided

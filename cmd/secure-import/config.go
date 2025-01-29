@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -56,6 +57,16 @@ func parseFlags() (*Config, error) {
 	if len(missingFlags) > 0 {
 		flag.Usage()
 		return nil, fmt.Errorf("\nMissing required flags: %v", missingFlags)
+	}
+
+	if !strings.HasPrefix(config.Registry, "localhost:") && 
+		!strings.Contains(config.Registry, ".") {
+		return nil, fmt.Errorf("invalid registry format: %s", config.Registry)
+	}	
+
+	if !strings.HasPrefix(config.RepoURL, "http://") && 
+		!strings.HasPrefix(config.RepoURL, "https://") {
+		return nil, fmt.Errorf("repo-url must start with http:// or https://")
 	}
 
 	// Set derived fields

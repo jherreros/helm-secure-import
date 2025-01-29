@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -39,6 +40,9 @@ func pushAndSignChart(config *Config) error {
 func getImagesFromChart(config *Config) ([]string, error) {
 	args := []string{"template", config.ChartFile}
 	if config.Values != "" {
+		if _, err := os.Stat(config.Values); err != nil {
+			return nil, fmt.Errorf("values file not found: %s", config.Values)
+		}
 		args = append(args, "-f", config.Values)
 	}
 

@@ -19,6 +19,22 @@ func main() {
 }
 
 func run(config *Config) error {
+	// Create temp directory for artifacts
+	tmpDir, err := os.MkdirTemp("", "helm-import-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp directory: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Change to temp directory
+	originalDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+	if err := os.Chdir(tmpDir); err != nil {
+		return fmt.Errorf("failed to change to temp directory: %w", err)
+	}
+	defer os.Chdir(originalDir)
 
 	// Pull Helm chart
 	if err := execCommand("helm", "pull", config.ChartName, "--version", config.Version, "--repo", config.RepoURL); err != nil {
