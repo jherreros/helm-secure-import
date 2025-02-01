@@ -17,7 +17,7 @@ A Helm plugin that imports charts and their container images into an OCI-complia
 
 - Helm v3.x
 
-### Prerequisites for specific functionality
+### Prerequisites for specific functionalities
 
 - Copa - For image patching
 - Trivy - For image scanning and patching
@@ -34,7 +34,7 @@ helm plugin install https://github.com/jherreros/helm-secure-import
 ```bash
 helm secure-import --chart <chart-name> \
                     --version <chart-version> \
-                    --repo-url <repository-url> \
+                    --repo- <repository-url> \
                     --registry <registry-url> \
                     [--sign-key <cosign-key-path>] \
                     [--values <values-file>]
@@ -44,19 +44,19 @@ Further examples of how to use the plugin can be found under [examples](examples
 
 ### Parameters
 
-- `--chart`: Name of the Helm chart
+- `--chart`: Name of the Helm chart. The name of the chart can also be specified directly (e.g. `helm secure-import my-chart`)
 - `--version`: Version of the chart to import
-- `--repo-url`: URL of the Helm repository
-- `--registry`: Name of the OCI-compliant Registry
+- `--repo`: URL of the Helm repository
+- `--registry`: Name of the OCI-compliant Registry. Can also be set as an environment variable (`HELM_REGISTRY`).
 - `--sign-key` (optional): Path to the Cosign signing key or KMS URI
 - `--values` (optional): Path to a Helm values file
 
 ### Example
 
 ```bash
-helm secure-import --chart nginx \
+helm secure-import nginx \
                     --version 1.2.3 \
-                    --repo-url https://charts.bitnami.com/bitnami \
+                    --repo https://charts.bitnami.com/bitnami \
                     --registry my.registry.io \
                     --sign-key /path/to/cosign.key \
                     --values ./values.yaml

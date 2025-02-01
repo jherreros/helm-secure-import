@@ -3,7 +3,7 @@
 set -e
 
 # Configuration
-REGISTRY="my.registry.io"
+export HELM_REGISTRY="my.registry.io"
 SIGN_KEY="./cosign.key"
 CHARTS_FILE="./charts.yaml"
 
@@ -19,8 +19,7 @@ for chart in "${charts[@]}"; do
     args=(
         --chart "$name"
         --version "$version"
-        --repo-url "$repo"
-        --registry "$REGISTRY"
+        --repo "$repo"
         --sign-key "$SIGN_KEY"
     )
     

@@ -13,11 +13,20 @@ This example demonstrates how to import the NGINX chart from the Bitnami reposit
 Import the NGINX chart:
 
 ```bash
-helm secure-import \
-  --chart nginx \
+helm secure-import nginx \
   --version 18.2.4 \
-  --repo-url https://charts.bitnami.com/bitnami \
-  --registry my.registry.io \
+  --repo https://charts.bitnami.com/bitnami \
+  --registry my.registry.io
+```
+
+### With registry as environment variable
+
+
+```bash
+export HELM_REGISTRY=my.registry.io
+helm secure-import nginx \
+  --version 18.2.4 \
+  --repo https://charts.bitnami.com/bitnami \
 ```
 
 ## Signing images
@@ -32,10 +41,9 @@ Same as simple scenario, plus:
 ### Usage
 
 ```bash
-helm secure-import \
-  --chart nginx \
+helm secure-import nginx \
   --version 18.2.4 \
-  --repo-url https://charts.bitnami.com/bitnami \
+  --repo https://charts.bitnami.com/bitnami \
   --registry my.registry.io \
   --sign-key ./cosign.key
 ```
@@ -52,10 +60,9 @@ Same as basic example, plus:
 ## Usage
 
 ```bash
-helm secure-import \
-  --chart nginx \
+helm secure-import nginx \
   --version 18.2.4 \
-  --repo-url https://charts.bitnami.com/bitnami \
+  --repo https://charts.bitnami.com/bitnami \
   --registry my.registry.io \
   --sign-key ./cosign.key \
   --values ./values.yaml

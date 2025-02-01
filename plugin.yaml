@@ -1,5 +1,5 @@
 name: "secure-import"
-version: "0.1.3"
+version: "0.2.0"
 usage: "Import Helm charts and container images to OCI-compliant Registry"
 description: |-
   This plugin helps you import Helm charts and their container images into any OCI-compliant Registry.
@@ -10,10 +10,10 @@ description: |-
   - Support for any OCI-compliant registry
   
   Basic usage:
-    $ helm secure-import --chart <name> --version <version> --repo-url <url> --registry <registry>
+    $ helm secure-import <name> --version <version> --repo <url> --registry <registry>
   
   With signing:
-    $ helm secure-import --chart <name> --version <version> --repo-url <url> --registry <registry> --sign-key <key-path>
+    $ helm secure-import <name> --version <version> --repo <url> --registry <registry> --sign-key <key-path>
 
 command: "$HELM_PLUGIN_DIR/bin/helm-secure-import"
 hooks:

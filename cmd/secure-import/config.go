@@ -40,6 +40,23 @@ func parseFlags() (*Config, error) {
 
 	flag.Parse()
 
+	// Check for positional arguments
+	args := flag.Args()
+	if config.ChartName == "" && len(args) > 0 {
+		// Use the first positional argument as the chart name
+		config.ChartName = args[0]
+		// Remove the chart name from the positional arguments to avoid confusion
+		args = args[1:]
+	}
+
+	// Re-parse the remaining positional arguments as flags
+	// This allows flags to appear after the chart name
+	if len(args) > 0 {
+		if err := flag.CommandLine.Parse(args); err != nil {
+			return nil, fmt.Errorf("failed to parse additional flags: %v", err)
+		}
+	}
+
 	// Check environment variable for registry if not set via flag
 	if config.Registry == "" {
 		config.Registry = os.Getenv("HELM_REGISTRY")
