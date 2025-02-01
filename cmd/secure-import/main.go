@@ -37,7 +37,7 @@ func run(config *Config) error {
 	defer os.Chdir(originalDir)
 
 	// Pull Helm chart
-	if err := execCommand("helm", "pull", config.ChartName, "--version", config.Version, "--repo", config.RepoURL); err != nil {
+	if err := execCommand("helm", "pull", config.ChartName, "--version", config.Version, "--repo", config.Repo); err != nil {
 		return fmt.Errorf("failed to pull chart: %w", err)
 	}
 
