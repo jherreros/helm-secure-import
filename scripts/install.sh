@@ -2,13 +2,13 @@
 
 set -e
 
-prerequisites=(cosign trivy copa yq)
+prerequisites=(cosign trivy copa)
 
 # Check for prerequisites
 for command in $prerequisites
 do
     if ! command -v $command >/dev/null 2>&1; then
-        echo "Warning: $command is not installed. Please install $command before using this plugin."
+        echo "Warning: $command is not installed. Please install $command if you want to get the most of this plugin."
     fi
 done
 

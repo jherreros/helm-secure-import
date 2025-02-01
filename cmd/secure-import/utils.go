@@ -13,6 +13,12 @@ func execCommand(name string, args ...string) error {
 	return cmd.Run()
 }
 
+// isInstalled checks if the given tool is available in the system's PATH.
+func isInstalled(tool string) bool {
+	_, err := exec.LookPath(tool)
+	return err == nil
+}
+
 func checkVulnerabilities(jsonFile string) (bool, error) {
 	data, err := os.ReadFile(jsonFile)
 	if err != nil {

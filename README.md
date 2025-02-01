@@ -16,10 +16,12 @@ A Helm plugin that imports charts and their container images into an OCI-complia
 ## Prerequisites
 
 - Helm v3.x
-- yq
-- Copa
-- Trivy
-- Cosign
+
+### Prerequisites for specific functionality
+
+- Copa - For image patching
+- Trivy - For image scanning and patching
+- Cosign - For image signing
 
 ## Installation
 

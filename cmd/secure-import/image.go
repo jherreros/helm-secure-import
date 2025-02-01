@@ -5,8 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
 	"github.com/google/go-containerregistry/pkg/crane"
 	v1name "github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
@@ -85,47 +87,13 @@ func processNewImage(image, registry, name, tag, finalImage string, config *Conf
 		return fmt.Errorf("failed to pull image: %w", err)
 	}
 
-	// Use temp directory for Trivy scan results
-	jsonFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%s.json", 
-		strings.ReplaceAll(name, "/", "-"), tag))
-	defer os.Remove(jsonFile)
-
-	if err := execCommand("trivy", "image",
-		"--vuln-type", "os",
-		"--ignore-unfixed",
-		"-f", "json",
-		"-o", jsonFile,
-		image); err != nil {
-		return fmt.Errorf("failed to run Trivy scan: %w", err)
-	}
-
-	// Check vulnerabilities
-	hasVulns, err := checkVulnerabilities(jsonFile)
-	if err != nil {
-		return err
-	}
-
-	if hasVulns {
-		fmt.Printf("Patching %s:%s...\n", name, tag)
-		if err := execCommand("copa", "patch",
-			"-r", jsonFile,
-			"-i", image,
-			"-t", "patched"); err != nil {
+	if isInstalled("copa"){
+		img, err = patchImage(name, tag, image, registry, img)
+		if err != nil {
 			return fmt.Errorf("failed to patch image: %w", err)
 		}
-		
-		// Get the patched image from local daemon
-		ref, err := v1name.ParseReference(fmt.Sprintf("%s/%s:patched", registry, name))
-		if err != nil {
-			return fmt.Errorf("failed to parse reference: %w", err)
-		}
-		
-		img, err = daemon.Image(ref)
-		if err != nil {
-			return fmt.Errorf("failed to get patched image from daemon: %w", err)
-		}
 	} else {
-		fmt.Println("No vulnerabilities were found.")
+		fmt.Println("Skipping patching - copa is not available")
 	}
 
 	// Push the final image using crane
@@ -133,15 +101,23 @@ func processNewImage(image, registry, name, tag, finalImage string, config *Conf
 		return fmt.Errorf("failed to push image: %w", err)
 	}
 
-	// Run post-patch Trivy scan
-	if err := execCommand("trivy", "image",
-		"--vuln-type", "os",
-		"--ignore-unfixed",
-		finalImage); err != nil {
-		return fmt.Errorf("failed to run post-patch Trivy scan: %w", err)
+	if isInstalled("trivy"){
+		// Run post-patch Trivy scan
+		if err := execCommand("trivy", "image",
+			"--vuln-type", "os",
+			"--ignore-unfixed",
+			finalImage); err != nil {
+			return fmt.Errorf("failed to run post-patch Trivy scan: %w", err)
+		}
+	} else {
+		fmt.Println("Skipping vulnerability scanning - trivy is not available")
 	}
 
-	// Skip signing if no key provided
+	if !isInstalled("cosign") {
+		fmt.Println("Skipping image signing - cosign is not available")
+		return nil
+	}
+
 	if !config.Sign {
 		fmt.Println("Skipping image signing as no signing key was provided")
 		return nil
@@ -157,4 +133,50 @@ func processNewImage(image, registry, name, tag, finalImage string, config *Conf
 		"--key", config.SignKey,
 		fmt.Sprintf("%s/%s@%s",
 			config.Registry, name, digest))
+}
+
+func patchImage(name, tag, image, registry string, img v1.Image) (v1.Image, error) {
+		// Use temp directory for Trivy scan results
+		jsonFile := filepath.Join(os.TempDir(), fmt.Sprintf("%s-%s.json", 
+			strings.ReplaceAll(name, "/", "-"), tag))
+		defer os.Remove(jsonFile)
+
+		if err := execCommand("trivy", "image",
+			"--vuln-type", "os",
+			"--ignore-unfixed",
+			"-f", "json",
+			"-o", jsonFile,
+			image); err != nil {
+			return nil, fmt.Errorf("failed to run Trivy scan: %w", err)
+		}
+
+		// Check vulnerabilities
+		hasVulns, err := checkVulnerabilities(jsonFile)
+		if err != nil {
+			return nil, err
+		}
+
+		if hasVulns {
+			fmt.Printf("Patching %s:%s...\n", name, tag)
+			if err := execCommand("copa", "patch",
+				"-r", jsonFile,
+				"-i", image,
+				"-t", "patched"); err != nil {
+				return nil, fmt.Errorf("failed to patch image: %w", err)
+			}
+			
+			// Get the patched image from local daemon
+			ref, err := v1name.ParseReference(fmt.Sprintf("%s/%s:patched", registry, name))
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse reference: %w", err)
+			}
+			
+			img, err = daemon.Image(ref)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get patched image from daemon: %w", err)
+			}
+		} else {
+			fmt.Println("No vulnerabilities were found.")
+		}
+	return img, nil
 }
