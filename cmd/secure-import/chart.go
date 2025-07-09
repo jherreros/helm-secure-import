@@ -1,14 +1,15 @@
 package main
 
 import (
-	"fmt"
-	"io"
 	"bytes"
+	"fmt"
+	"gopkg.in/yaml.v3"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
-	"gopkg.in/yaml.v3"
 )
 
 func pushAndSignChart(config *Config) error {
@@ -28,8 +29,8 @@ func pushAndSignChart(config *Config) error {
 		return nil
 	}
 
-	digest, err := getDigest(config.Registry, 
-		fmt.Sprintf("charts/%s", config.ChartName), 
+	digest, err := getDigest(config.Registry,
+		fmt.Sprintf("charts/%s", config.ChartName),
 		config.Version)
 	if err != nil {
 		return fmt.Errorf("failed to get chart digest: %w", err)
@@ -56,7 +57,7 @@ func getImagesFromChart(config *Config) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to template chart: %w", err)
 	}
-	
+
 	images, err := extractImages(helmOutput)
 	if err != nil {
 		return nil, fmt.Errorf("error extracting images: %v", err)
@@ -67,10 +68,7 @@ func getImagesFromChart(config *Config) ([]string, error) {
 
 // extractImages takes a YAML input and returns a slice of valid image strings.
 func extractImages(yamlInput []byte) ([]string, error) {
-	var images []string
-
-	// Define regex pattern for valid image references.
-	// Adjust the pattern as needed.
+	var rawImages []string
 	pattern := `^[a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]+)?/[a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)?:[a-zA-Z0-9._-]+$`
 	re := regexp.MustCompile(pattern)
 
@@ -83,43 +81,53 @@ func extractImages(yamlInput []byte) ([]string, error) {
 			}
 			return nil, fmt.Errorf("failed to decode YAML: %w", err)
 		}
-		// Recursively search for "image" keys in the document.
-		extractImagesFromNode(&node, re, &images)
+		extractImagesFromNode(&node, re, &rawImages)
 	}
 
-	return images, nil
+	// Deduplicate and validate the results
+	uniqueImages := make(map[string]bool)
+	var result []string
+	for _, img := range rawImages {
+		if re.MatchString(img) && !uniqueImages[img] {
+			uniqueImages[img] = true
+			result = append(result, img)
+		}
+	}
+	sort.Strings(result) // Sort for deterministic output
+	return result, nil
 }
 
-// extractImagesFromNode recursively searches for nodes with the key "image"
-// and, if found, validates the corresponding value using the regex.
+// extractImagesFromNode recursively searches for image strings in a YAML node.
 func extractImagesFromNode(n *yaml.Node, re *regexp.Regexp, images *[]string) {
-	switch n.Kind {
-	case yaml.DocumentNode:
-		// Document nodes typically have a single child.
-		for _, child := range n.Content {
-			extractImagesFromNode(child, re, images)
-		}
-	case yaml.MappingNode:
-		// In a mapping, keys and values are stored in pairs.
+	// Rule 1: Check for the `repository` and `tag` pattern in a map.
+	if n.Kind == yaml.MappingNode {
+		contentMap := make(map[string]string)
 		for i := 0; i < len(n.Content); i += 2 {
 			keyNode := n.Content[i]
 			valueNode := n.Content[i+1]
-
-			// If the key is "image" and the value is a scalar, check the value.
-			if keyNode.Value == "image" && valueNode.Kind == yaml.ScalarNode {
-				trimmed := strings.TrimSpace(valueNode.Value)
-				if trimmed != "" && re.MatchString(trimmed) {
-					*images = append(*images, trimmed)
-				}
+			if valueNode.Kind == yaml.ScalarNode {
+				contentMap[keyNode.Value] = valueNode.Value
 			}
-			// Recurse into both the key and value nodes.
-			extractImagesFromNode(keyNode, re, images)
-			extractImagesFromNode(valueNode, re, images)
 		}
-	case yaml.SequenceNode:
-		// For sequences, iterate over each child.
-		for _, child := range n.Content {
-			extractImagesFromNode(child, re, images)
+
+		if repo, ok := contentMap["repository"]; ok {
+			if tag, ok := contentMap["tag"]; ok {
+				imageStr := fmt.Sprintf("%s:%s", repo, tag)
+				*images = append(*images, imageStr)
+				// We found the image structure, so we DON'T recurse further into this map's children.
+				return
+			}
 		}
+	}
+
+	// Rule 2: If it's not an image structure map, check for scalar values that are full image strings.
+	if n.Kind == yaml.ScalarNode {
+		*images = append(*images, strings.TrimSpace(n.Value))
+		return // Scalars have no children
+	}
+
+	// Rule 3: Recurse into children for documents, sequences, and maps that were not identified as image structures.
+	for _, child := range n.Content {
+		extractImagesFromNode(child, re, images)
 	}
 }
