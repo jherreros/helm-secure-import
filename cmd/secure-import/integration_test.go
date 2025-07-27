@@ -130,6 +130,7 @@ func TestImportChart(t *testing.T) {
 		Repo:      repoURL,
 		Registry:  registryURL,
 		ChartFile: "my-chart-1.2.3.tgz",
+		ReportFormat: "table",
 	}
 
 	err := run(config)
@@ -172,6 +173,7 @@ image:
 		Registry:  registryURL,
 		Values:    valuesFile.Name(),
 		ChartFile: "my-chart-1.2.3.tgz",
+		ReportFormat: "table",
 	}
 
 	err = run(config)

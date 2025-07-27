@@ -7,28 +7,35 @@ import (
 	"strings"
 )
 
+// Config holds the application configuration
+// It's populated from command-line flags and environment variables.
+
 type Config struct {
-	ChartName string
-	Version   string
-	Repo   string
-	Values    string
-	Registry  string
-	SignKey   string
-	ChartFile string
-	Sign      bool
+	ChartName      string
+	Version        string
+	Repo           string
+	Values         string
+	Registry       string
+	SignKey        string
+	ChartFile      string
+	Sign           bool
+	IsOCI          bool
+	ReportFormat   string
+	ReportFile     string
 }
 
 func parseFlags() (*Config, error) {
 	config := &Config{}
-	
+
 	flag.StringVar(&config.ChartName, "chart", "", "Chart name (required)")
 	flag.StringVar(&config.Version, "version", "", "Chart version (required)")
-	flag.StringVar(&config.Repo, "repo", "", "Repository (required)")
+	flag.StringVar(&config.Repo, "repo", "", "Repository URL (can be HTTP or OCI)")
 	flag.StringVar(&config.Values, "values", "", "Values file (optional)")
-	flag.StringVar(&config.Registry, "registry", "", "Registry URL (can also be set via HELM_REGISTRY env var)")
+	flag.StringVar(&config.Registry, "registry", "", "Destination registry URL (can also be set via HELM_REGISTRY env var)")
 	flag.StringVar(&config.SignKey, "sign-key", "", "Signing key (optional)")
+	flag.StringVar(&config.ReportFormat, "report-format", "table", "Report format (table or json)")
+	flag.StringVar(&config.ReportFile, "report-file", "", "Report file (for json format)")
 
-	// Custom usage message
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nSecurely imports all images in a helm chart into a container registry.\n\n")
@@ -40,31 +47,25 @@ func parseFlags() (*Config, error) {
 
 	flag.Parse()
 
-	// Check for positional arguments
 	args := flag.Args()
 	if config.ChartName == "" && len(args) > 0 {
-		// Use the first positional argument as the chart name
 		config.ChartName = args[0]
-		// Remove the chart name from the positional arguments to avoid confusion
 		args = args[1:]
 	}
 
-	// Re-parse the remaining positional arguments as flags
-	// This allows flags to appear after the chart name
 	if len(args) > 0 {
 		if err := flag.CommandLine.Parse(args); err != nil {
 			return nil, fmt.Errorf("failed to parse additional flags: %v", err)
 		}
 	}
 
-	// Check environment variable for registry if not set via flag
 	if config.Registry == "" {
 		config.Registry = os.Getenv("HELM_REGISTRY")
 	}
-	
-	// Required flag validation
+
+	config.IsOCI = strings.HasPrefix(config.Repo, "oci://")
+
 	var missingFlags []string
-	
 	if config.ChartName == "" {
 		missingFlags = append(missingFlags, "chart")
 	}
@@ -80,17 +81,21 @@ func parseFlags() (*Config, error) {
 
 	if len(missingFlags) > 0 {
 		flag.Usage()
-		return nil, fmt.Errorf("\nMissing required flags: %v", missingFlags)
+		return nil, fmt.Errorf("\nmissing required flags: %v", missingFlags)
 	}
 
-	if !strings.HasPrefix(config.Registry, "localhost:") && 
+	if !strings.HasPrefix(config.Registry, "localhost:") &&
 		!strings.Contains(config.Registry, ".") {
 		return nil, fmt.Errorf("invalid registry format: %s", config.Registry)
-	}	
+	}
 
-	// Set derived fields
+	if config.ReportFormat != "table" && config.ReportFormat != "json" {
+		return nil, fmt.Errorf("invalid report format: %s", config.ReportFormat)
+	}
+
 	config.ChartFile = fmt.Sprintf("%s-%s.tgz", config.ChartName, config.Version)
 	config.Sign = config.SignKey != ""
 
 	return config, nil
 }
+

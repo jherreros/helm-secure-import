@@ -4,7 +4,7 @@ A Helm plugin that imports charts and their container images into an OCI-complia
 
 ## Features
 
-- Pulls Helm charts from any repository
+- Pulls Helm charts from any repository (including OCI)
 - Pushes charts to OCI-compliant Registry
 - Signs charts using Cosign
 - Extracts and processes container images from charts:
@@ -12,6 +12,7 @@ A Helm plugin that imports charts and their container images into an OCI-complia
   - Automatically patches vulnerable images using Copa
   - Pushes images to registry
   - Signs images using Cosign
+- Generates a report of the import process (table or JSON)
 
 ## Prerequisites
 
@@ -34,10 +35,12 @@ helm plugin install https://github.com/jherreros/helm-secure-import
 ```bash
 helm secure-import --chart <chart-name> \
                     --version <chart-version> \
-                    --repo- <repository-url> \
+                    --repo <repository-url> \
                     --registry <registry-url> \
                     [--sign-key <cosign-key-path>] \
-                    [--values <values-file>]
+                    [--values <values-file>] \
+                    [--report-format <format>] \
+                    [--report-file <file>]
 ```
 
 Further examples of how to use the plugin can be found under [examples](examples/basic/basic.md).
@@ -46,20 +49,37 @@ Further examples of how to use the plugin can be found under [examples](examples
 
 - `--chart`: Name of the Helm chart. The name of the chart can also be specified directly (e.g. `helm secure-import my-chart`)
 - `--version`: Version of the chart to import
-- `--repo`: URL of the Helm repository
+- `--repo`: URL of the Helm repository (can be HTTP or OCI)
 - `--registry`: Name of the OCI-compliant Registry. Can also be set as an environment variable (`HELM_REGISTRY`).
 - `--sign-key` (optional): Path to the Cosign signing key or KMS URI
 - `--values` (optional): Path to a Helm values file
+- `--report-format` (optional): Report format (table or json). Defaults to table.
+- `--report-file` (optional): Report file path (for json format).
 
 ### Example
 
 ```bash
+# From a traditional repository
 helm secure-import nginx \
                     --version 1.2.3 \
                     --repo https://charts.bitnami.com/bitnami \
                     --registry my.registry.io \
                     --sign-key /path/to/cosign.key \
                     --values ./values.yaml
+
+# From an OCI registry
+helm secure-import my-chart \
+                    --version 4.5.6 \
+                    --repo oci://my.registry.io/charts \
+                    --registry my.registry.io
+
+# With JSON report
+helm secure-import my-chart \
+                    --version 4.5.6 \
+                    --repo oci://my.registry.io/charts \
+                    --registry my.registry.io \
+                    --report-format json \
+                    --report-file report.json
 ```
 
 ## Security Features
@@ -80,3 +100,5 @@ The idea for this plugin is inspired in [Helmper](https://github.com/Christoffer
 ## License
 
 This project is licensed under the MIT license.
+
+

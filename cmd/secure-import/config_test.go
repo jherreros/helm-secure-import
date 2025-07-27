@@ -38,6 +38,7 @@ func TestParseFlags(t *testing.T) {
 				Values:    "my-values.yaml",
 				ChartFile: "my-chart-1.2.3.tgz",
 				Sign:      true,
+				ReportFormat: "table",
 			},
 		},
 		{
@@ -45,7 +46,7 @@ func TestParseFlags(t *testing.T) {
 			args: []string{"cmd"},
 			env:  map[string]string{},
 			expectErr: true,
-			expectedErrStr: "Missing required flags: [chart version repo registry]",
+			expectedErrStr: "missing required flags: [chart version repo registry]",
 		},
 		{
 			name: "Registry from env var",
@@ -59,6 +60,7 @@ func TestParseFlags(t *testing.T) {
 				Registry:  "my.registry.io",
 				ChartFile: "my-chart-1.2.3.tgz",
 				Sign:      false,
+				ReportFormat: "table",
 			},
 		},
 		{
@@ -80,7 +82,31 @@ func TestParseFlags(t *testing.T) {
 				Registry:  "my.registry.io",
 				ChartFile: "my-chart-1.2.3.tgz",
 				Sign:      false,
+				ReportFormat: "table",
 			},
+		},
+		{
+			name: "JSON report",
+			args: []string{"cmd", "--chart", "my-chart", "--version", "1.2.3", "--repo", "my-repo", "--registry", "my.registry.io", "--report-format", "json", "--report-file", "report.json"},
+			env:  map[string]string{},
+			expectErr: false,
+			expectedConfig: &Config{
+				ChartName: "my-chart",
+				Version:   "1.2.3",
+				Repo:      "my-repo",
+				Registry:  "my.registry.io",
+				ChartFile: "my-chart-1.2.3.tgz",
+				Sign:      false,
+				ReportFormat: "json",
+				ReportFile: "report.json",
+			},
+		},
+		{
+			name: "Invalid report format",
+			args: []string{"cmd", "--chart", "my-chart", "--version", "1.2.3", "--repo", "my-repo", "--registry", "my.registry.io", "--report-format", "xml"},
+			env:  map[string]string{},
+			expectErr: true,
+			expectedErrStr: "invalid report format: xml",
 		},
 	}
 

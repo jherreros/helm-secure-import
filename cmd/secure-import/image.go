@@ -63,7 +63,7 @@ func getDigest(registry, repository, reference string) (string, error) {
 	return digest, nil
 }
 
-func processImage(image string, config *Config) error {
+func processImage(image string, config *Config) (bool, error) {
 	fmt.Printf("Processing image: %s\n", image)
 	parts := strings.Split(image, "/")
 
@@ -81,7 +81,7 @@ func processImage(image string, config *Config) error {
 
 	lastIndexOf := strings.LastIndex(nameWithTag, ":")
 	if lastIndexOf == -1 {
-		return fmt.Errorf("no tag found in image: %s", image)
+		return false, fmt.Errorf("no tag found in image: %s", image)
 	}
 
 	name := nameWithTag[:lastIndexOf]
@@ -95,19 +95,19 @@ func processImage(image string, config *Config) error {
 
 	exists, err := imageExists(finalImage)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	if !exists {
 		fmt.Printf("  Image %s does not exist in target registry. Processing new image.\n", finalImage)
 		if err := processNewImage(image, originalRegistry, name, tag, finalImage, config); err != nil {
-			return err
+			return false, err
 		}
+		return true, nil
 	} else {
 		fmt.Printf("  Image %s already exists in registry. Skipping push.\n", finalImage)
+		return false, nil
 	}
-
-	return nil
 }
 
 func processNewImage(image, registry, name, tag, finalImage string, config *Config) error {
