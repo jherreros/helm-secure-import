@@ -121,15 +121,18 @@ image:
 }
 
 func TestImportChart(t *testing.T) {
+	// Clear the cache to ensure clean state for this test
+	clearImageCache()
+
 	registryURL, repoURL, teardown := setupTest(t)
 	defer teardown()
 
 	config := &Config{
-		ChartName: "my-chart",
-		Version:   "1.2.3",
-		Repo:      repoURL,
-		Registry:  registryURL,
-		ChartFile: "my-chart-1.2.3.tgz",
+		ChartName:    "my-chart",
+		Version:      "1.2.3",
+		Repo:         repoURL,
+		Registry:     registryURL,
+		ChartFile:    "my-chart-1.2.3.tgz",
 		ReportFormat: "table",
 	}
 
@@ -147,6 +150,9 @@ func TestImportChart(t *testing.T) {
 }
 
 func TestImportChartWithValues(t *testing.T) {
+	// Clear the cache to ensure clean state for this test
+	clearImageCache()
+
 	registryURL, repoURL, teardown := setupTest(t)
 	defer teardown()
 
@@ -167,12 +173,12 @@ image:
 	valuesFile.Close()
 
 	config := &Config{
-		ChartName: "my-chart",
-		Version:   "1.2.3",
-		Repo:      repoURL,
-		Registry:  registryURL,
-		Values:    valuesFile.Name(),
-		ChartFile: "my-chart-1.2.3.tgz",
+		ChartName:    "my-chart",
+		Version:      "1.2.3",
+		Repo:         repoURL,
+		Registry:     registryURL,
+		Values:       valuesFile.Name(),
+		ChartFile:    "my-chart-1.2.3.tgz",
 		ReportFormat: "table",
 	}
 

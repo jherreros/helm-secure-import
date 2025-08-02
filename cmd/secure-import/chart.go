@@ -3,20 +3,26 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io"
 	"os"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 func pushAndSignChart(config *Config) error {
+	chartRef := fmt.Sprintf("%s/charts/%s:%s", config.Registry, config.ChartName, config.Version)
+
 	if err := execCommand("helm", "push", config.ChartFile,
 		fmt.Sprintf("oci://%s/charts/", config.Registry)); err != nil {
 		return fmt.Errorf("failed to push chart: %w", err)
 	}
+
+	// Invalidate cache for the chart since we just pushed it
+	invalidateCacheEntry(chartRef)
 
 	if !isInstalled("cosign") {
 		fmt.Println("Skipping image signing - cosign is not available")
@@ -69,7 +75,12 @@ func getImagesFromChart(config *Config) ([]string, error) {
 // extractImages takes a YAML input and returns a slice of valid image strings.
 func extractImages(yamlInput []byte) ([]string, error) {
 	var rawImages []string
-	pattern := `^[a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]+)?/[a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)?:[a-zA-Z0-9._-]+$`
+	// Updated pattern to support:
+	// - Docker Hub images (e.g., postgres:13, nginx:latest)
+	// - Registry images (e.g., registry.io/app:latest)
+	// - Localhost images (e.g., localhost:5000/app:v1)
+	// - Complex tags with pre-release and build metadata (e.g., v1.2.3-alpha+build.123)
+	pattern := `^([a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]+)?/)?[a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*:[a-zA-Z0-9._+-]+$`
 	re := regexp.MustCompile(pattern)
 
 	decoder := yaml.NewDecoder(bytes.NewReader(yamlInput))

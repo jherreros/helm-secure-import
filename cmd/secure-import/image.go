@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
@@ -14,6 +15,26 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 )
 
+// Cache for image existence checks to avoid repeated registry API calls
+var (
+	imageExistsCache = make(map[string]bool)
+	imageExistsMutex sync.RWMutex
+)
+
+// clearImageCache clears the image existence cache (useful for testing)
+func clearImageCache() {
+	imageExistsMutex.Lock()
+	defer imageExistsMutex.Unlock()
+	imageExistsCache = make(map[string]bool)
+}
+
+// invalidateCacheEntry removes a specific entry from the cache
+func invalidateCacheEntry(imageRef string) {
+	imageExistsMutex.Lock()
+	defer imageExistsMutex.Unlock()
+	delete(imageExistsCache, imageRef)
+}
+
 type TrivyResult struct {
 	Results []struct {
 		Vulnerabilities []interface{} `json:"Vulnerabilities"`
@@ -21,7 +42,16 @@ type TrivyResult struct {
 }
 
 func imageExists(imageRef string) (bool, error) {
-	fmt.Printf("  Checking if image exists: %s\n", imageRef)
+	// Check cache first
+	imageExistsMutex.RLock()
+	if exists, found := imageExistsCache[imageRef]; found {
+		imageExistsMutex.RUnlock()
+		fmt.Printf("  ⚡ Cached result: image %s exists: %v\n", imageRef, exists)
+		return exists, nil
+	}
+	imageExistsMutex.RUnlock()
+
+	fmt.Printf("  🔍 Checking if image exists: %s\n", imageRef)
 
 	opts := []crane.Option{crane.WithAuthFromKeychain(authn.DefaultKeychain)}
 	if strings.HasPrefix(imageRef, "localhost:") {
@@ -29,20 +59,31 @@ func imageExists(imageRef string) (bool, error) {
 	}
 
 	_, err := crane.Head(imageRef, opts...)
+	exists := true
 	if err != nil {
 		// Check if the error is a transport error indicating the image was not found (404).
 		if tErr, ok := err.(*transport.Error); ok {
 			if tErr.StatusCode == 404 {
 				fmt.Printf("  Image %s does not exist (404)\n", imageRef)
-				return false, nil
+				exists = false
+			} else {
+				// For other transport errors, return the error without caching
+				return false, fmt.Errorf("transport error: %w", err)
 			}
+		} else {
+			// For other errors (like authentication failures), return the error without caching
+			return false, fmt.Errorf("failed to check image existence: %w", err)
 		}
-		// For other errors (like authentication failures), return the error.
-		fmt.Printf("  Error checking image existence for %s: %v\n", imageRef, err)
-		return false, fmt.Errorf("error checking image existence: %w", err)
+	} else {
+		fmt.Printf("  Image %s exists.\n", imageRef)
 	}
-	fmt.Printf("  Image %s exists.\n", imageRef)
-	return true, nil
+
+	// Cache the result
+	imageExistsMutex.Lock()
+	imageExistsCache[imageRef] = exists
+	imageExistsMutex.Unlock()
+
+	return exists, nil
 }
 
 func getDigest(registry, repository, reference string) (string, error) {
@@ -146,6 +187,9 @@ func processNewImage(image, registry, name, tag, finalImage string, config *Conf
 		return fmt.Errorf("failed to push image %s: %w", finalImage, err)
 	}
 	fmt.Printf("  Successfully pushed image: %s\n", finalImage)
+
+	// Invalidate cache for the pushed image
+	invalidateCacheEntry(finalImage)
 
 	if isInstalled("trivy") {
 		fmt.Println("  Trivy is available. Running post-patch Trivy scan.")

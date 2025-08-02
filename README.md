@@ -43,6 +43,46 @@ helm secure-import --chart <chart-name> \
                     [--report-file <file>]
 ```
 
+### Getting Help
+
+```bash
+# Show usage information
+helm secure-import --help
+
+# Show version information  
+helm secure-import --version
+```
+
+The `--help` flag shows all available options:
+
+```
+Usage of helm-secure-import:
+
+Securely imports all images in a helm chart into a container registry.
+
+Flags:
+  -chart string
+        Chart name (required)
+  -registry string
+        Destination registry URL (can also be set via HELM_REGISTRY env var)
+  -repo string
+        Repository URL (can be HTTP or OCI)
+  -report-file string
+        Report file (for json format)
+  -report-format string
+        Report format (table or json) (default "table")
+  -sign-key string
+        Signing key (optional)
+  -values string
+        Values file (optional)
+  -version string
+        Chart version (required)
+
+Environment variables:
+  HELM_REGISTRY    Registry URL (alternative to --registry flag)
+  HELM_SIGN_KEY    Signing key path (alternative to --sign-key flag)
+```
+
 Further examples of how to use the plugin can be found under [examples](examples/basic/basic.md).
 
 ### Parameters
@@ -92,6 +132,40 @@ If vulnerabilities are found, the plugin automatically patches the images using 
 
 ### Signing
 Both charts and container images are signed using Cosign before being pushed to your registry. This ensures the integrity and authenticity of the artifacts.
+
+## Troubleshooting
+
+### Common Issues
+
+#### Authentication Errors
+If you encounter authentication errors when connecting to your registry:
+- Ensure you're logged in to your registry: `docker login <registry-url>`
+- Verify your credentials have push permissions
+- For private registries, ensure the registry URL format is correct
+
+#### Missing Dependencies
+If you get errors about missing tools:
+- **Trivy**: Install from [https://aquasecurity.github.io/trivy/](https://aquasecurity.github.io/trivy/)
+- **Copa**: Install from [https://github.com/project-copacetic/copacetic](https://github.com/project-copacetic/copacetic)
+- **Cosign**: Install from [https://docs.sigstore.dev/cosign/installation/](https://docs.sigstore.dev/cosign/installation/)
+
+#### Chart Not Found
+If you see "chart not found" errors:
+- Verify the chart name and version exist in the repository
+- Check if the repository URL is accessible
+- For OCI repositories, ensure the URL starts with `oci://`
+
+#### Permission Denied
+If you encounter permission errors:
+- Check that your Docker daemon is running and accessible
+- Verify you have write permissions to the destination registry
+- Ensure your signing key file (if used) is readable
+
+#### Network Issues
+If you experience connectivity problems:
+- Check your internet connection
+- Verify firewall settings allow connections to the registry
+- For corporate networks, check if proxy settings are needed
 
 ## Acknowledgements
 
