@@ -204,6 +204,11 @@ image: my-component:123
 `,
 			expectedImages: []string{"my-component:123"},
 		},
+		{
+			name:           "Label-like strings should be ignored",
+			yamlInput:      "items:\n  - crossplane:latest\n  - crossplane:aggregate-to-admin\n  - crossplane:aggregate-to-edit\n  - crossplane:aggregate-to-view\n  - crossplane:allowed-provider-permissions\n  - crossplane:aggregate-to-browse\n  - crossplane:masters\n  - xpkg.crossplane.io/crossplane/crossplane:v1.20.1\n",
+			expectedImages: []string{"crossplane:latest", "xpkg.crossplane.io/crossplane/crossplane:v1.20.1"},
+		},
 	}
 
 	for _, tc := range testCases {

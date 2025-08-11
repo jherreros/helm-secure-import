@@ -99,7 +99,10 @@ func extractImages(yamlInput []byte) ([]string, error) {
 		if !re.MatchString(img) { // Not an image candidate
 			continue
 		}
-		if isLikelyPortReference(img) { // Heuristic exclusion
+		if isLikelyPortReference(img) { // Exclude service:port style
+			continue
+		}
+		if isLikelyLabelNotImage(img) { // Exclude label-like entries (e.g., crossplane:aggregate-to-admin)
 			continue
 		}
 		if !uniqueImages[img] {
@@ -143,6 +146,57 @@ func isLikelyPortReference(img string) bool {
 	// Repository must have a hyphen to differentiate from typical library images (redis, busybox, etc.)
 	if !strings.Contains(repo, "-") {
 		return false
+	}
+	return true
+}
+
+// isLikelyLabelNotImage filters out scalars that syntactically resemble an image but are likely RBAC/label keys or permission strings.
+// Conditions:
+//   - Single segment repository (no slash, no registry dot/port)
+//   - Tag contains no digits
+//   - Tag NOT in allowlist of common all-alpha tags used for real images
+//
+// Examples filtered: crossplane:aggregate-to-admin, crossplane:allowed-provider-permissions, crossplane:masters
+// Kept: crossplane:v1.20.1, nginx:latest, alpine:latest (slash or allowed tag or digits present)
+func isLikelyLabelNotImage(img string) bool {
+	lastColon := strings.LastIndex(img, ":")
+	if lastColon == -1 {
+		return false
+	}
+	repo := img[:lastColon]
+	tag := img[lastColon+1:]
+
+	if strings.Contains(repo, "/") { // path component -> likely image
+		return false
+	}
+	if strings.Contains(repo, ".") { // registry host -> image
+		return false
+	}
+	if strings.Contains(repo, ":") { // port in repo -> image
+		return false
+	}
+	hasDigit := false
+	for _, r := range tag {
+		if unicode.IsDigit(r) {
+			hasDigit = true
+			break
+		}
+	}
+	if hasDigit { // version-like
+		return false
+	}
+	allowed := map[string]struct{}{
+		"latest": {}, "stable": {}, "dev": {}, "prod": {}, "test": {}, "canary": {},
+		"alpine": {}, "scratch": {}, "distroless": {}, "slim": {},
+	}
+	if _, ok := allowed[tag]; ok {
+		return false
+	}
+	// Tags composed solely of letters and hyphens are suspect if above conditions met
+	for _, r := range tag {
+		if !(unicode.IsLetter(r) || r == '-') {
+			return false // contains other chars -> keep
+		}
 	}
 	return true
 }
