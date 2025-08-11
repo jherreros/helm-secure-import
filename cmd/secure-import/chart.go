@@ -105,6 +105,9 @@ func extractImages(yamlInput []byte) ([]string, error) {
 		if isLikelyLabelNotImage(img) { // Exclude label-like entries (e.g., crossplane:aggregate-to-admin)
 			continue
 		}
+		if isLikelyMetricOrRecordingRule(img) { // Exclude Prometheus recording/metric rule names
+			continue
+		}
 		if !uniqueImages[img] {
 			uniqueImages[img] = true
 			result = append(result, img)
@@ -199,6 +202,86 @@ func isLikelyLabelNotImage(img string) bool {
 		}
 	}
 	return true
+}
+
+// isLikelyMetricOrRecordingRule filters out Prometheus recording rule names that resemble image references.
+// Typical patterns seen:
+//
+//	apiserver_request:availability30d
+//	apiserver_request:burnrate1h / burnrate5m / burnrate30m / burnrate2h / burnrate6h / burnrate1d / burnrate3d
+//	count:up0 / count:up1
+//	node_namespace_pod_container:container_memory_cache / ..._rss / ..._swap / ..._working_set_bytes
+//
+// These should be excluded because they are metrics, not images.
+func isLikelyMetricOrRecordingRule(img string) bool {
+	lastColon := strings.LastIndex(img, ":")
+	if lastColon == -1 {
+		return false
+	}
+	repo := img[:lastColon]
+	tag := img[lastColon+1:]
+
+	// Quick allow if repo contains a slash (real image path/registry)
+	if strings.Contains(repo, "/") {
+		return false
+	}
+	// Repository candidates typical for metrics
+	metricRepos := map[string]struct{}{
+		"apiserver_request":            {},
+		"count":                        {},
+		"node_namespace_pod_container": {},
+	}
+	if _, ok := metricRepos[repo]; !ok {
+		return false
+	}
+
+	lowerTag := strings.ToLower(tag)
+
+	// Specific known prefixes
+	if strings.HasPrefix(lowerTag, "availability") {
+		return true
+	}
+	if strings.HasPrefix(lowerTag, "burnrate") {
+		return true
+	}
+	if strings.HasPrefix(lowerTag, "container_memory_") || lowerTag == "container_memory_cache" || lowerTag == "container_memory_rss" || lowerTag == "container_memory_swap" {
+		return true
+	}
+	if strings.HasPrefix(lowerTag, "up") { // e.g., up0, up1
+		// Ensure remainder after 'up' is digits
+		rest := lowerTag[2:]
+		if rest != "" {
+			allDigits := true
+			for _, r := range rest {
+				if r < '0' || r > '9' {
+					allDigits = false
+					break
+				}
+			}
+			if allDigits {
+				return true
+			}
+		}
+	}
+
+	// Duration suffix pattern like 5m, 30m, 1h, 2h, 6h, 1d, 3d, 30d (common in burnrate/availability tags already caught)
+	if len(lowerTag) > 2 {
+		unit := lowerTag[len(lowerTag)-1]
+		if unit == 's' || unit == 'm' || unit == 'h' || unit == 'd' { // 's' just in case
+			// Check preceding characters contain at least one digit
+			hasDigit := false
+			for _, r := range lowerTag[:len(lowerTag)-1] {
+				if r >= '0' && r <= '9' {
+					hasDigit = true
+					break
+				}
+			}
+			if hasDigit {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // extractImagesFromNode recursively searches for image strings in a YAML node.

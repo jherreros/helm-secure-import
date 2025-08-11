@@ -209,6 +209,11 @@ image: my-component:123
 			yamlInput:      "items:\n  - crossplane:latest\n  - crossplane:aggregate-to-admin\n  - crossplane:aggregate-to-edit\n  - crossplane:aggregate-to-view\n  - crossplane:allowed-provider-permissions\n  - crossplane:aggregate-to-browse\n  - crossplane:masters\n  - xpkg.crossplane.io/crossplane/crossplane:v1.20.1\n",
 			expectedImages: []string{"crossplane:latest", "xpkg.crossplane.io/crossplane/crossplane:v1.20.1"},
 		},
+		{
+			name:           "Prometheus recording rule names should be ignored",
+			yamlInput:      "metrics:\n  - apiserver_request:availability30d\n  - apiserver_request:burnrate1h\n  - node_namespace_pod_container:container_memory_rss\n  - quay.io/prometheus/prometheus:v3.5.0\n  - quay.io/prometheus-operator/prometheus-operator:v0.84.1\n  - count:up0\n  - docker.io/grafana/grafana:12.1.0\n",
+			expectedImages: []string{"docker.io/grafana/grafana:12.1.0", "quay.io/prometheus-operator/prometheus-operator:v0.84.1", "quay.io/prometheus/prometheus:v3.5.0"},
+		},
 	}
 
 	for _, tc := range testCases {

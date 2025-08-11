@@ -9,7 +9,7 @@ import (
 )
 
 // Version is the current version of the plugin
-const Version = "0.3.2"
+const Version = "0.3.3"
 
 // Config holds the application configuration
 // It's populated from command-line flags and environment variables.
