@@ -77,25 +77,26 @@ func run(config *Config) error {
 	chartRef := fmt.Sprintf("%s/charts/%s:%s", config.Registry, config.ChartName, config.Version)
 	report.Chart.Name = chartRef
 
-	fmt.Printf("🔍 Checking if chart exists in registry: %s\n", chartRef)
-	chartExists := false
-	chartExists, err = imageExists(chartRef)
-	if err != nil {
-		return err
-	}
-
-	if !chartExists {
-		if config.DryRun {
-			fmt.Printf("📤 Would push and sign chart: %s\n", chartRef)
-		} else {
+	chartExists := true // assume exists in dry-run to avoid registry auth calls
+	if config.DryRun {
+		fmt.Printf("🔍 (dry-run) Skipping registry existence check for chart: %s\n", chartRef)
+		fmt.Printf("📤 (dry-run) Would push and sign chart if it didn't exist: %s\n", chartRef)
+	} else {
+		fmt.Printf("🔍 Checking if chart exists in registry: %s\n", chartRef)
+		chartExists = false
+		chartExists, err = imageExists(chartRef)
+		if err != nil {
+			return err
+		}
+		if !chartExists {
 			fmt.Printf("📤 Pushing and signing chart: %s\n", chartRef)
 			if err := pushAndSignChart(config); err != nil {
 				return err
 			}
+			report.Chart.Pushed = true
+		} else {
+			fmt.Printf("✅ Chart %s:%s already exists. Skipping push.\n", config.ChartName, config.Version)
 		}
-		report.Chart.Pushed = true
-	} else {
-		fmt.Printf("✅ Chart %s:%s already exists. Skipping push.\n", config.ChartName, config.Version)
 	}
 
 	// Get images from chart

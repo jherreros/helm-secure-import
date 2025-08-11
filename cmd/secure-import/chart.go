@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -75,11 +76,7 @@ func getImagesFromChart(config *Config) ([]string, error) {
 // extractImages takes a YAML input and returns a slice of valid image strings.
 func extractImages(yamlInput []byte) ([]string, error) {
 	var rawImages []string
-	// Updated pattern to support:
-	// - Docker Hub images (e.g., postgres:13, nginx:latest)
-	// - Registry images (e.g., registry.io/app:latest)
-	// - Localhost images (e.g., localhost:5000/app:v1)
-	// - Complex tags with pre-release and build metadata (e.g., v1.2.3-alpha+build.123)
+	// Pattern supports common container image references. Intentionally broad; we'll post-filter false positives.
 	pattern := `^([a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]+)?/)?[a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*:[a-zA-Z0-9._+-]+$`
 	re := regexp.MustCompile(pattern)
 
@@ -95,17 +92,59 @@ func extractImages(yamlInput []byte) ([]string, error) {
 		extractImagesFromNode(&node, re, &rawImages)
 	}
 
-	// Deduplicate and validate the results
+	// Deduplicate, validate, and filter out obvious host:port style entries mistakenly classified as images.
 	uniqueImages := make(map[string]bool)
 	var result []string
 	for _, img := range rawImages {
-		if re.MatchString(img) && !uniqueImages[img] {
+		if !re.MatchString(img) { // Not an image candidate
+			continue
+		}
+		if isLikelyPortReference(img) { // Heuristic exclusion
+			continue
+		}
+		if !uniqueImages[img] {
 			uniqueImages[img] = true
 			result = append(result, img)
 		}
 	}
-	sort.Strings(result) // Sort for deterministic output
+	sort.Strings(result) // Deterministic output
 	return result, nil
+}
+
+// isLikelyPortReference attempts to distinguish false positives like service-name:8080 from real images.
+// Heuristics (kept conservative to avoid excluding legitimate images):
+//   - No slash in the repository part (official library images also match this; keep them unless other conditions hit)
+//   - Tag is only digits
+//   - Tag length >= 4 (reduces impact on common numeric version tags like :1, :12, :123)
+//   - Repository segment contains at least one hyphen (most official single-word library images like redis, nginx lack hyphens)
+//
+// This will filter things like release-name-argocd-repo-server:8081 or release-name-redis-ha-haproxy:6379.
+// NOTE: This may still allow rare false positives; adjust heuristics as needed with more real-world data.
+func isLikelyPortReference(img string) bool {
+	lastColon := strings.LastIndex(img, ":")
+	if lastColon == -1 {
+		return false
+	}
+	repo := img[:lastColon]
+	tag := img[lastColon+1:]
+
+	if strings.Contains(repo, "/") { // Has a path component; treat as image
+		return false
+	}
+	// Tag must be all digits
+	for _, r := range tag {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	if len(tag) < 4 { // Allow short numeric tags like :1 or :13
+		return false
+	}
+	// Repository must have a hyphen to differentiate from typical library images (redis, busybox, etc.)
+	if !strings.Contains(repo, "-") {
+		return false
+	}
+	return true
 }
 
 // extractImagesFromNode recursively searches for image strings in a YAML node.

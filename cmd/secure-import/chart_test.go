@@ -173,6 +173,37 @@ image:
 `,
 			expectErr: true,
 		},
+		{
+			name: "Service name with port should be ignored",
+			yamlInput: `
+metadata:
+  name: example
+spec:
+  selector:
+    app: example
+  ports:
+    - name: http
+      port: 8081
+  imageCandidate: release-name-argocd-repo-server:8081
+  other: release-name-redis-ha-haproxy:6379
+  valid: my-repo/app:1.2.3
+`,
+			expectedImages: []string{"my-repo/app:1.2.3"},
+		},
+		{
+			name: "Numeric short tag should stay (version not port)",
+			yamlInput: `
+image: redis:637
+`,
+			expectedImages: []string{"redis:637"},
+		},
+		{
+			name: "Hyphenated repo with short numeric tag allowed",
+			yamlInput: `
+image: my-component:123
+`,
+			expectedImages: []string{"my-component:123"},
+		},
 	}
 
 	for _, tc := range testCases {
