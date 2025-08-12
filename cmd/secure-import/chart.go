@@ -76,9 +76,9 @@ func getImagesFromChart(config *Config) ([]string, error) {
 // extractImages takes a YAML input and returns a slice of valid image strings.
 func extractImages(yamlInput []byte) ([]string, error) {
 	var rawImages []string
-	// Pattern supports common container image references. Intentionally broad; we'll post-filter false positives.
-	pattern := `^([a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]+)?/)?[a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*:[a-zA-Z0-9._+-]+$`
-	re := regexp.MustCompile(pattern)
+	// Strict image reference pattern (anchored) used for validation
+	anchoredPattern := `^([a-zA-Z0-9][a-zA-Z0-9.-]*(?::[0-9]+)?/)?[a-zA-Z0-9/_-]+(?:/[a-zA-Z0-9/_-]+)*:[a-zA-Z0-9._+-]+$`
+	anchoredRe := regexp.MustCompile(anchoredPattern)
 
 	decoder := yaml.NewDecoder(bytes.NewReader(yamlInput))
 	for {
@@ -89,23 +89,16 @@ func extractImages(yamlInput []byte) ([]string, error) {
 			}
 			return nil, fmt.Errorf("failed to decode YAML: %w", err)
 		}
-		extractImagesFromNode(&node, re, &rawImages)
+		extractImagesFromNode(&node, anchoredRe, nil, &rawImages)
 	}
 
-	// Deduplicate, validate, and filter out obvious host:port style entries mistakenly classified as images.
 	uniqueImages := make(map[string]bool)
 	var result []string
 	for _, img := range rawImages {
-		if !re.MatchString(img) { // Not an image candidate
+		if !anchoredRe.MatchString(img) {
 			continue
 		}
-		if isLikelyPortReference(img) { // Exclude service:port style
-			continue
-		}
-		if isLikelyLabelNotImage(img) { // Exclude label-like entries (e.g., crossplane:aggregate-to-admin)
-			continue
-		}
-		if isLikelyMetricOrRecordingRule(img) { // Exclude Prometheus recording/metric rule names
+		if isLikelyPortReference(img) || isLikelyLabelNotImage(img) || isLikelyMetricOrRecordingRule(img) {
 			continue
 		}
 		if !uniqueImages[img] {
@@ -113,7 +106,7 @@ func extractImages(yamlInput []byte) ([]string, error) {
 			result = append(result, img)
 		}
 	}
-	sort.Strings(result) // Deterministic output
+	sort.Strings(result)
 	return result, nil
 }
 
@@ -248,7 +241,6 @@ func isLikelyMetricOrRecordingRule(img string) bool {
 		return true
 	}
 	if strings.HasPrefix(lowerTag, "up") { // e.g., up0, up1
-		// Ensure remainder after 'up' is digits
 		rest := lowerTag[2:]
 		if rest != "" {
 			allDigits := true
@@ -263,12 +255,9 @@ func isLikelyMetricOrRecordingRule(img string) bool {
 			}
 		}
 	}
-
-	// Duration suffix pattern like 5m, 30m, 1h, 2h, 6h, 1d, 3d, 30d (common in burnrate/availability tags already caught)
 	if len(lowerTag) > 2 {
 		unit := lowerTag[len(lowerTag)-1]
-		if unit == 's' || unit == 'm' || unit == 'h' || unit == 'd' { // 's' just in case
-			// Check preceding characters contain at least one digit
+		if unit == 's' || unit == 'm' || unit == 'h' || unit == 'd' {
 			hasDigit := false
 			for _, r := range lowerTag[:len(lowerTag)-1] {
 				if r >= '0' && r <= '9' {
@@ -285,8 +274,8 @@ func isLikelyMetricOrRecordingRule(img string) bool {
 }
 
 // extractImagesFromNode recursively searches for image strings in a YAML node.
-func extractImagesFromNode(n *yaml.Node, re *regexp.Regexp, images *[]string) {
-	// Rule 1: Check for the `repository` and `tag` pattern in a map.
+func extractImagesFromNode(n *yaml.Node, anchoredRe, _ *regexp.Regexp, images *[]string) {
+	// Mapping node: look for repository/tag pair first.
 	if n.Kind == yaml.MappingNode {
 		contentMap := make(map[string]string)
 		for i := 0; i < len(n.Content); i += 2 {
@@ -296,25 +285,38 @@ func extractImagesFromNode(n *yaml.Node, re *regexp.Regexp, images *[]string) {
 				contentMap[keyNode.Value] = valueNode.Value
 			}
 		}
-
 		if repo, ok := contentMap["repository"]; ok {
 			if tag, ok := contentMap["tag"]; ok {
-				imageStr := fmt.Sprintf("%s:%s", repo, tag)
-				*images = append(*images, imageStr)
-				// We found the image structure, so we DON'T recurse further into this map's children.
-				return
+				*images = append(*images, fmt.Sprintf("%s:%s", repo, tag))
+				return // don't recurse this map
 			}
 		}
 	}
 
-	// Rule 2: If it's not an image structure map, check for scalar values that are full image strings.
+	// Scalar node: may be a direct image or contain one or more images inside.
 	if n.Kind == yaml.ScalarNode {
-		*images = append(*images, strings.TrimSpace(n.Value))
-		return // Scalars have no children
+		val := strings.TrimSpace(n.Value)
+		if val == "" {
+			return
+		}
+		if anchoredRe.MatchString(val) { // whole scalar is an image
+			*images = append(*images, val)
+			return
+		}
+		// Embedded flag pattern: something=IMAGE. Only consider last '=' segment.
+		if strings.Contains(val, "=") {
+			candidate := val[strings.LastIndex(val, "=")+1:]
+			candidate = strings.TrimSpace(candidate)
+			// Avoid picking up simple words; require at least one slash (image path) and anchored match.
+			if strings.Contains(candidate, "/") && anchoredRe.MatchString(candidate) {
+				*images = append(*images, candidate)
+			}
+		}
+		return
 	}
 
-	// Rule 3: Recurse into children for documents, sequences, and maps that were not identified as image structures.
+	// Recurse into children (documents / sequences / remaining maps).
 	for _, child := range n.Content {
-		extractImagesFromNode(child, re, images)
+		extractImagesFromNode(child, anchoredRe, nil, images)
 	}
 }

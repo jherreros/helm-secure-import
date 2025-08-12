@@ -1,5 +1,5 @@
 name: "secure-import"
-version: "0.3.3"
+version: "0.3.4"
 usage: "Import Helm charts and container images to OCI-compliant Registry"
 description: |-
   This plugin helps you import Helm charts and their container images into any OCI-compliant Registry.

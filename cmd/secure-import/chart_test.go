@@ -214,6 +214,15 @@ image: my-component:123
 			yamlInput:      "metrics:\n  - apiserver_request:availability30d\n  - apiserver_request:burnrate1h\n  - node_namespace_pod_container:container_memory_rss\n  - quay.io/prometheus/prometheus:v3.5.0\n  - quay.io/prometheus-operator/prometheus-operator:v0.84.1\n  - count:up0\n  - docker.io/grafana/grafana:12.1.0\n",
 			expectedImages: []string{"docker.io/grafana/grafana:12.1.0", "quay.io/prometheus-operator/prometheus-operator:v0.84.1", "quay.io/prometheus/prometheus:v3.5.0"},
 		},
+		{
+			name: "Embedded image inside flag string",
+			yamlInput: `args:
+  - --some-flag=value
+  - --config-reloader-image=quay.io/prometheus-operator/prometheus-config-reloader:v0.84.1
+  - --webhook-image=registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.6.1
+`,
+			expectedImages: []string{"quay.io/prometheus-operator/prometheus-config-reloader:v0.84.1", "registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.6.1"},
+		},
 	}
 
 	for _, tc := range testCases {
